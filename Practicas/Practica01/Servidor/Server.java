@@ -2,6 +2,7 @@ package Servidor;
 
 import Directory.Directory;
 
+import java.io.BufferedInputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.File;
@@ -68,6 +69,22 @@ public class Server {
         return -1;
     }
 
+    public static boolean isZipFile(File file) throws IOException {
+        if(file.isDirectory()) {
+            return false;
+        }
+        if(!file.canRead()) {
+            throw new IOException("Cannot read file "+file.getAbsolutePath());
+        }
+        if(file.length() < 4) {
+            return false;
+        }
+        DataInputStream in = new DataInputStream(new BufferedInputStream(new FileInputStream(file)));
+        int test = in.readInt();
+        in.close();
+        return test == 0x504b0304;
+    }
+
     public void uploadFile(String path){                              
         try {
             System.out.println("\nSubir un archivo al Drive(Servidor)");        
@@ -103,9 +120,12 @@ public class Server {
             dis.close();
 
             File f = new File(save);
-            ZipUtils unzipFile = new ZipUtils(f.getAbsolutePath());
-            unzipFile.unzipFile(path);
-            f.delete();
+            if(isZipFile(f)){
+                ZipUtils unzipFile = new ZipUtils(f.getAbsolutePath());
+                unzipFile.unzipFile(path);
+                f.delete();
+            }
+            
 
         } catch (IOException e) {
             e.printStackTrace();
@@ -168,7 +188,7 @@ public class Server {
                 zipDirectory.generateFileList(new File(f.getAbsolutePath()));
                 zipDirectory.zipIt(OUTPUT_ZIP_FILE);
                 
-                name = "Upload-" + new File(OUTPUT_ZIP_FILE).getName();
+                name = "Download-" + new File(OUTPUT_ZIP_FILE).getName();
                 size = new File(OUTPUT_ZIP_FILE).length();
                 path = new File(OUTPUT_ZIP_FILE).getAbsolutePath();
             }else{
