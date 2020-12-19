@@ -20,4 +20,8 @@ El estudiante implementará una aplicación para el envío de múltiples archivo
 
    *   Practica 02 Carrito de compras
 
-El estudiante implementará una aplicación simular un carrito de compras y un ticket.    
+El estudiante implementará una aplicación simular un carrito de compras y un ticket.  
+	
+   *   Practica 04 WGET
+
+El estudiante implementará una apliacación que realice la misma función que la herramienta wget para la descarga de recursos de un sitio web.
