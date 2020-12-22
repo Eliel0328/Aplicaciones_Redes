@@ -1,6 +1,7 @@
 import java.io.BufferedInputStream;
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -10,6 +11,8 @@ import java.net.URL;
 import java.util.Enumeration;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.swing.text.MutableAttributeSet;
 import javax.swing.text.html.HTML;
@@ -17,7 +20,6 @@ import javax.swing.text.html.HTMLEditorKit;
 import javax.swing.text.html.parser.ParserDelegator;
 
 public class wget {
-
     static boolean isAddressResource(String s) {    //  Verificar link a descargar
         for(int i = s.length() - 1; i > 0; i--){
             if(s.charAt(i) == '/')
@@ -55,6 +57,16 @@ public class wget {
             return s + a;
     }
 
+    static boolean linkViable(String s) { //  Verificar que se un link disponible para ir
+        if(s.contains("//"))    return false;
+        if(s.contains("@"))     return false;            
+        if(s.contains("#"))     return false;
+        if(s.contains("\\"))    return false;
+        if(s.charAt(0) == '?')
+            return false;
+        return true;
+    }
+
     static boolean linkViable(String s, String a) { //  Verificar que se un link disponible para ir
         if(s.contains("//"))    return false;
         if(s.contains("@"))     return false;            
@@ -85,6 +97,67 @@ public class wget {
         return s;
     }
 
+    static int nivels(String s) {           
+        String[] aux = s.split("/");
+        int count = 0;
+        for(String a: aux){
+            if(!a.equals(""))
+                count++;
+        }
+        return count;
+    }
+
+    static boolean back_ahead(String s, String a) {           
+        if(a.contains(s) || a.contains("/" + s))
+            return true;
+        return false;
+    }
+
+    static String complementPath(int nivel){
+        String replaced = "";
+        for(int i = 0; i < nivel; ++i){
+            replaced += "../";
+        }
+        return replaced;
+    }
+
+    static String path_downloadImg(String s, String img, int n){
+        String[] aux = s.split("/");
+        String[] aux1 = img.split("/");
+        int count = nivels(s) - n;
+        String filePath = "";
+        
+        for(String a: aux){
+            if(!a.equals("") && count > 0){
+                filePath += "/" + a;
+                --count;
+            }
+        }
+
+        for(String a: aux1){
+            if(!a.equals(""))
+                filePath += "/"+ a;
+        }
+
+        return filePath;
+    }
+
+    static void downloadImg(String s, String b){
+        String[] aux = s.split("/");
+        String path = "";
+        int n = aux.length;
+
+        for(int i = 0; i < n - 1; ++i){
+            if(!aux[i].equals("")){
+                File f = new File(path + "/" + aux[i]);
+                path +=  aux[i] + "/";
+                f.mkdirs();
+            }
+        }
+        
+        downloadResorce(b, path, aux[n - 1]);
+    }
+
     static void downloadResorce(String url, String path, String filename){
         System.out.println("Direccion: " + url);
 
@@ -103,26 +176,104 @@ public class wget {
             fos.close();
             System.out.println("Descargado: " + filename);
         } catch (MalformedURLException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            System.out.println("Error, enlace no disponible para descarga");
         } catch (IOException e) {
-            // TODO Auto-generated catch block
-            e.printStackTrace();
+            System.out.println("Error, enlace no disponible para descarga");
         }
     }
 
-    //static void downloadResorces(Set<String> links, String nameHMTL, String actualURL, String previousURL, String path, String space) {
-    static void downloadResorces(Set<String> links, String actualURL, String previousURL, String path, String space) {
+    static void download_write(String url, String urlserver, String path, int nivel){
+        try{
+            //  Descargar el contenido del index
+            int c;
+            String html = "";
+            Set<String> links = new HashSet<>();
+            InputStream in = new URL(url).openStream();
+            while((c = in.read())!=-1) {
+                html += (char)c;
+            }
+            in.close();
 
+            //  Reescribir las direcciones en los links validos del servidor
+            Pattern p = Pattern.compile("href=\"(.*?)\"");
+            Matcher m = p.matcher(html);
+            
+            while (m.find()) {
+                String href = m.group();
+                int startIndex = href.indexOf("href=") + 6;
+                String hrefTag = href.substring(startIndex, href.length() - 1);
+                
+                //  Compronar que el link no haya sea valido y reescribirlo
+                if(linkViable(hrefTag) && !isResource(hrefTag) && !links.contains(hrefTag)){
+                    //  Determinar si es un enlace para avanzar o retroceder en el sitio
+                    if(back_ahead(hrefTag, url)){                                                                   //  Retroceder                                                       
+                        int aux = nivel - nivels(hrefTag);
+                        String auxString = complementPath(aux);
+                        html = html.replace(href, href.replace(hrefTag, auxString + "index.html"));
+                    }else{                                                                                          //  Avanzar
+                        if(hrefTag.charAt(hrefTag.length() - 1) == '/'){
+                            html = html.replace(href, "href=" + hrefTag.replace(hrefTag, hrefTag + "index.html"));
+                        }
+                        else{
+                            html = html.replace(href, "href=" + hrefTag.replace(hrefTag, hrefTag + "/index.html"));
+                        }   
+                    }
+                    links.add(hrefTag);                                                                             //  Marcar como visitado
+                }
+
+            }
+
+            //  Reescribir las direcciones y descargar imagenes
+            p = Pattern.compile("<img [^>]*src=[\\\"']([^\\\"^']*)");
+            m = p.matcher(html);
+
+            while (m.find()) {
+                String src = m.group();
+                int startIndex = src.indexOf("src=") + 5;
+                String srcTag = src.substring(startIndex, src.length());
+                
+                if(!links.contains(srcTag)){
+                    String auxString = complementPath(nivel);
+                    String pathImg = path_downloadImg(path, srcTag, nivel);
+                    downloadImg(pathImg, urlserver + srcTag);
+                    if(srcTag.charAt(0) == '/'){
+                        html = html.replace(srcTag, auxString.substring(0, (nivel * 3) - 1) + srcTag);
+                    }
+                    else{
+                        html = html.replace(srcTag, auxString + srcTag);
+                    }
+                    links.add(srcTag);
+                }
+                
+            }
+            
+            FileWriter myWriter = new FileWriter(path + "/index.html");
+            myWriter.write(html);
+            myWriter.close();            
+          } catch (IOException e) {
+            System.out.println("Error, enlace no disponible para descarga");
+          }
+          catch(Throwable err){
+            System.out.println("Error, enlace no disponible para descarga");
+        }
+
+    }
+
+    //static void downloadResorces(Set<String> links, String nameHMTL, String actual, String previousURL, String path, String space) {
+    static void downloadResorces(Set<String> links, String servername, String actual, String previous, String path, int nivel, String space) {
         try {
             //  Recursos necesario para recorrer el HTML
+            final int n = nivel + 1;
             Reader r = null;
-            URL pageURL = new URL(actualURL);
+            URL pageURL = new URL(actual);
             InputStream in = pageURL.openStream();
+            
 
             //  Descargar el HTML del index
-            //downloadResorce(actualURL, path, nameHMTL + ".html");
-            downloadResorce(actualURL, path, "index.html");
+            download_write(actual, servername, path, nivel);
+            //downloadResorce(actual, path, nameHMTL + ".html");
+            //downloadResorce(actual, path, "index.html");
+
 
             r = new InputStreamReader(in);
             ParserDelegator hp = new ParserDelegator();
@@ -132,27 +283,28 @@ public class wget {
                     if(t == HTML.Tag.A){
                         Enumeration attrNames = a.getAttributeNames();
                         
-                        //  Comprobar si quedan enlaces por recorrer
+                        //  Comprobar si quedan linkss por recorrer
                         while(attrNames.hasMoreElements()){
                             Object key = attrNames.nextElement();
                             String actualName = (String)a.getAttribute(key);
-                            String auxLink = makeLink(actualURL, actualName);
+                            String auxLink = makeLink(actual, actualName);
                             
-                            //  Comprobar enlace
-                            if("href".equals(key.toString()) &&  linkViable(actualName, previousURL) && !links.contains(auxLink)){
+                            //  Comprobar links
+                            if("href".equals(key.toString()) &&  linkViable(actualName, previous) && !links.contains(auxLink)){
                                 links.add(auxLink);
                                 System.out.println(actualName);
                                 System.out.println(space + auxLink);
                                 
-                                //  Descargar recurso o explorar un nuevo enlace
+                                //  Descargar recurso o explorar un nuevo links
                                 if(isResource(actualName)){
                                     downloadResorce(auxLink, path, onlyName(actualName));
                                 }else{
                                     System.out.println("Carpeta: " + actualName);
                                     File f = new File(path, actualName);
                                     f.mkdir();
-                                    //downloadResorces(links, actualName, makeLink(actualURL, actualName), actualURL, path + actualName, space + "----|");
-                                    downloadResorces(links, makeLink(actualURL, actualName), actualURL, path + actualName, space + "----|");
+                                    
+                                    //downloadResorces(links, actualName, makeLink(actual, actualName), actual, path + actualName, space + "----|");
+                                    downloadResorces(links, servername, makeLink(actual, actualName), actual, path + actualName, n, space + "----|");
 
                                 }
                             }
@@ -161,6 +313,8 @@ public class wget {
                 }
             }, true);
 
+            
+
         } catch (MalformedURLException e) {
             // TODO Auto-generated catch block
             e.printStackTrace();
@@ -168,40 +322,48 @@ public class wget {
             // TODO Auto-generated catch block
             e.printStackTrace();
         }
+
     }
 
-    static void getData_Download(String s, String[] partsURL){
-        String previousURL = previousAddress(s);        
-        String server = partsURL[0] + "//" + partsURL[2] + "/";
-        String path = newPath(partsURL);
+    static void getData_Download(String s, String[] parts){
+        String previous = previousAddress(s);                               //  Direccion URL anterior
+        String servername = parts[0] + "//" + parts[2] + "/";               //  Direccion URL servidor
+        String path = newPath(parts);                                       //  Nueva direccion de la descarga
+        int nivel = nivels(path) - 1;
 
-        System.out.println("Enlace en donde se descargaran recursos: " + s);
-        System.out.println("Dirección anterior: " + previousURL);
-        System.out.println("Dirección del servidor: " + server);
+        System.out.println("--  --  --  --  --  --  --  --  --  --  --  --  --");
+        System.out.println("Links en donde se descargaran recursos: " + s);
+        System.out.println("Dirección anterior: " + previous);
+        System.out.println("Dirección del servidor: " + servername);
+        System.out.println("Dirección nueva: " + path);
+        System.out.println("Profundidad : " + (nivel - 1));
         System.out.println("--  --  --  --  --  --  --  --  --  --  --  --  --");
 
+        //  Guardar datos actuales que ya no seran revisados
         Set<String> links = new HashSet<>();
         links.add(s);
-        links.add(previousURL);
-        links.add(server);
+        links.add(previous);
+        links.add(servername);
         
         //downloadResorces(links, "index", s, previousURL, path, "----|");
-        downloadResorces(links, s, previousURL, path, "----|");
+        downloadResorces(links, servername, s, previous, path, nivel, "----|");
 
     }
 
     public static void main(String[] args) {
         //  Dirección URL para descargar
         //String dirname = "https://i2.wp.com/i.imgur.com/idgMMrI.jpg";
-        String dirname = "http://148.204.58.221/axel/aplicaciones/sockets/java/udp/";
+        String dirname = "http://148.204.58.221/axel/aplicaciones/sockets/java/";
+        //String dirname = "https://tex.stackexchange.com/questions/46665/multiple-choices-questions-in-2-or-3-columns";
         String[] partsURL = dirname.split("/");
+        boolean resource = false;
 
-        if(isAddressResource(dirname)){
+        if(resource){
             //  Descargar un solo recurso en la ubicación actual
             downloadResorce(dirname, System.getProperty("user.dir"), partsURL[partsURL.length - 1]);
         }
         else{
-            //  Descargar todos los recursos de un enlace
+            //  Descargar todos los recursos de un links
             getData_Download(dirname, partsURL);
         }
 
