@@ -13,7 +13,7 @@ public class Test4 {
       Reader r = null;
 
       try   {
-         URL u = new URL("http://148.204.58.221/axel/aplicaciones/sockets/java/");
+         URL u = new URL("http://148.204.58.221/axel/aplicaciones/sockets/java/udp/");
          InputStream in = u.openStream();
          r = new InputStreamReader(in);
 

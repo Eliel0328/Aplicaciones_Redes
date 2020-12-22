@@ -9,7 +9,7 @@ import java.util.Set;
 
 public class Test1 {
   public static void main(String[] args) throws IOException {
-    URL url = new URL("http://148.204.58.221/axel/aplicaciones/sockets/java/");
+    URL url = new URL("http://148.204.58.221/axel/aplicaciones/sockets/java/udp/");
 
     URLConnection urlConnection = url.openConnection();
     Map<String, List<String>> headers = urlConnection.getHeaderFields();

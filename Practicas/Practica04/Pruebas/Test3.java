@@ -7,7 +7,7 @@ import java.net.URL;
 
 public class Test3 {
     public static void main(String[] args) {
-        try (BufferedInputStream in = new BufferedInputStream(new URL("http://148.204.58.221/axel/aplicaciones/sockets/java/udp/").openStream());
+        try (BufferedInputStream in = new BufferedInputStream(new URL("http://148.204.58.221/icons/a.gif").openStream());
         FileOutputStream fileOutputStream = new FileOutputStream("Avance1")) {
         
             byte dataBuffer[] = new byte[1024];
